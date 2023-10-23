@@ -7,6 +7,7 @@ export {}
 
 declare module 'vue' {
   export interface GlobalComponents {
+    DownLoadFile: typeof import('./src/components/downLoadFile.vue')['default']
     ElButton: typeof import('element-plus/es')['ElButton']
     ElDropdown: typeof import('element-plus/es')['ElDropdown']
     ElDropdownItem: typeof import('element-plus/es')['ElDropdownItem']
@@ -16,6 +17,6 @@ declare module 'vue' {
     ElTable: typeof import('element-plus/es')['ElTable']
     ElTableColumn: typeof import('element-plus/es')['ElTableColumn']
     ElUpload: typeof import('element-plus/es')['ElUpload']
-    HelloWorld: typeof import('./src/components/HelloWorld.vue')['default']
+    UpLoadFile: typeof import('./src/components/upLoadFile.vue')['default']
   }
 }

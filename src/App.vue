@@ -2,66 +2,23 @@
   <div style="width: 100vw;height: 100vh;display: flex;">
 
     <div style="width: 70vw;border-style: none solid none none;">
-
-      <div style="width: 100%;height: 50vh;border-style: none none solid none;">
-        <!-- multiple支持上传多个文件 -->
-        <input v-if="filterData.length === 0" ref="file" class="inputFile" type="file" multiple webkitdirectory />
-        <el-table v-if="filterData" :data="filterData" highlight-current-row style="width: 100%;height: 100%;" border
-          @selection-change="handleSelectionChange">
-          <el-table-column type="selection" width="55" />
-          <el-table-column prop="fileName" label="文件名称" />
-          <el-table-column prop="uploadTime" label="上传时间">
-            <template #default="scope">
-              <div>{{ time(scope.row.uploadTime) }}</div>
-            </template>
-          </el-table-column>
-          <el-table-column label="文件大小" width="150">
-            <template #default="scope">
-              <div>{{ scope.row.fileSize }}kb</div>
-            </template>
-          </el-table-column>
-        </el-table>
+      <div>
+        <upLoadFile @sendDownFileList="getDownFileList"></upLoadFile>
       </div>
 
       <div style="width: 100%;height: 50vh;">
-
-        <el-table :data="tableData" highlight-current-row style="width: 100%;height: 100%;" border
-          @selection-change="handleSelectionChange">
-          <el-table-column type="selection" width="55" />
-          <el-table-column prop="fileName" label="文件名称" />
-          <el-table-column prop="uploadTime" label="上传时间">
-            <template #default="scope">
-              <div>{{ time(scope.row.uploadTime) }}</div>
-            </template>
-          </el-table-column>
-          <el-table-column label="文件大小" width="150">
-            <template #default="scope">
-              <div>{{ scope.row.fileSize }}kb</div>
-            </template>
-          </el-table-column>
-          <el-table-column align="center" width="250">
-            <template #header>
-              <el-button type="primary" :disabled="downAllDisabled" @click="downAllFile">下载全部</el-button>
-              <el-button type="danger" :disabled="downAllDisabled" @click="deleteAllFile">删除全部</el-button>
-            </template>
-            <template #default="scope">
-              <el-button type="primary" @click="downFile(scope.row)">下载</el-button>
-              <el-button type="danger" @click="deleteOneFile(scope.row)">删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-
+        <downLoadFile :tableData="tableData"></downLoadFile>
       </div>
     </div>
 
     <div style="display: flex;justify-content: center;align-items: center;width: 30vw;position: relative;">
       <div v-if="filterData.length === 0"
         style="position: absolute;z-index: 99;width: 100%;height: 100%;background-color: rgb(236, 236, 236);opacity: 0.3;"
-        @click="firstUpLoadFile">
+        @click="filterFileReady">
       </div>
       <div style="width: 100%;text-align: center;">
         <el-dropdown @command="filterModeChange">
-          <el-button type="primary">
+          <el-button type="info">
             {{ filterMode }}<el-icon class="el-icon--right"><arrow-down /></el-icon>
           </el-button>
           <template #dropdown>
@@ -81,7 +38,7 @@
             </el-upload>
           </div>
 
-          <div v-if="filterMode == '以文件格式筛选'">
+          <div v-if="filterMode == '以文件格式筛选' || filterMode == '以文件名+文件格式筛选'">
             <el-dropdown @command="filterFileTypeChange">
               <el-button type="primary">
                 {{ mode }}<el-icon class="el-icon--right"><arrow-down /></el-icon>
@@ -98,12 +55,20 @@
                   <el-dropdown-item command="pptx">.pptx</el-dropdown-item>
                   <el-dropdown-item command="xls">.xls</el-dropdown-item>
                   <el-dropdown-item command="xlsx">.xlsx</el-dropdown-item>
+                  <el-dropdown-item command="mp3">.mp3</el-dropdown-item>
+                  <el-dropdown-item command="mp4">.mp4</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
           </div>
-
-          <el-button type="success" style="margin-top:2vh" :icon="FullScreen" :disabled="filterBtnIsDis" @click="filterRun">筛选</el-button>
+          <div style="width: 100%;display: flex;justify-content: space-between;margin-top:2vh">
+            <el-button type="warning" :icon="Scissor" :disabled="filterBtnIsDis"
+              @click="filterBtnIsDis2 = false, addMode = '替换'">替换掉已筛选</el-button>
+            <el-button type="warning" :icon="Plus" :disabled="filterBtnIsDis"
+              @click="filterBtnIsDis2 = false, addMode = '添加'">追加到已筛选</el-button>
+          </div>
+          <el-button type="primary" style="margin-top:2vh" :icon="FullScreen" :disabled="filterBtnIsDis2"
+            @click="filterRun">筛选</el-button>
         </div>
       </div>
     </div>
@@ -112,63 +77,40 @@
 </template>
 
 <script setup lang='ts'>
-import { ref, onMounted, watch } from 'vue';
-import { ElMessage } from 'element-plus'
+import { ref, watch } from 'vue';
 import type { UploadProps } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import 'element-plus/es/components/message/style/css'
-import { FullScreen } from '@element-plus/icons-vue'
-// const reg = /[^\.]\w*$/
-// let lastName = reg.exec(e.target.files[0].name)![0]
-
-type oneFileType = {
-  id: number,
-  uploadTime: number,
-  fileName: string,
-  fileSize: number,
-  file: File
-}
+import { FullScreen, Scissor, Plus } from '@element-plus/icons-vue'
+import upLoadFile from './components/upLoadFile.vue';
+import downLoadFile from './components/downLoadFile.vue';
 
 type tableDataType = {
   id: number,
   uploadTime: number,
   fileName: string,
-  fileSize: number,
+  fileSize: string,
   file: File
 }[]
 
-const file = ref<HTMLInputElement>()
 const filterMode = ref("以文件名筛选")
 const filterData = ref<tableDataType>([])
+const tableData = ref<tableDataType>([])
 const filterAskName = ref("")
 const readFileList = ref([])
 const filterBtnIsDis = ref(true)
+const filterBtnIsDis2 = ref(true)
 const mode = ref("请选择需要筛选的文件格式")
 const fileModeType = ref("")
+const addMode = ref("")
 
-const tableData = ref<tableDataType>([])
-const SelectFile = ref<tableDataType>([])
+const getDownFileList = (data: tableDataType) => {
+  console.log(465);
+  
+  filterData.value = data
+}
 
-const downAllDisabled = ref(true)
-
-onMounted(() => {
-  file.value!.onchange = (e: any) => {
-    if (e.target.files.length === 0) return
-    filterData.value = []
-    for (let i = 0; i < e.target.files.length; i++) {
-      filterData.value.push({
-        id: i,
-        uploadTime: e.target.files[i].lastModified,
-        fileName: e.target.files[i].name,
-        fileSize: e.target.files[i].size,
-        file: e.target.files[i]
-      })
-    }
-    // tableData.value = formData
-    // downFile(e.target.files[0], e.target.files[0].name, e.target.files[0].type)
-  }
-})
-
-const firstUpLoadFile = () => {
+const filterFileReady = () => {
   ElMessage.error({
     message: "请先上传文件夹",
   })
@@ -203,18 +145,14 @@ const beforReadTxt: UploadProps['beforeUpload'] = (rawFile) => {
   return false
 }
 
-const filterRun = ()=>{
-  if(filterMode.value === '以文件名筛选'){
+const filterRun = () => {
+  if (filterMode.value === '以文件名筛选') {
     fileNameFilter()
-  }else if(filterMode.value === '以文件格式筛选'){
+  } else if (filterMode.value === '以文件格式筛选') {
     fileTypeFilter()
+  } else {
+    fileNameAndTypeFilter()
   }
-}
-
-const fileNameFilter = () => {
-  const fileNameArr = filterAskName.value.split(',')
-  let result = filterData.value.filter(item => fileNameArr.some(item2 => item.fileName.includes(item2)))
-  tableData.value = result
 }
 
 const filterFileTypeChange = (item: string) => {
@@ -223,69 +161,66 @@ const filterFileTypeChange = (item: string) => {
   filterBtnIsDis.value = false
 }
 
+const fileNameFilter = () => {
+  const fileNameArr = filterAskName.value.split(',')
+  let result = filterData.value.filter(item => fileNameArr.some(item2 => item.fileName.includes(item2)))
+  if (result.length === 0) {
+    ElMessage.warning({
+      showClose: true,
+      message: '暂无符合条件的文件',
+    })
+    return
+  }
+  if (addMode.value === "替换") {
+    tableData.value = result
+  } else {
+    tableData.value.unshift(...result)
+  }
+}
+
+const reg = /[^\.]\w*$/
 const fileTypeFilter = () => {
-  const reg = /[^\.]\w*$/
-  tableData.value = filterData.value.filter((item) => {
+  let data = filterData.value.filter((item) => {
     let lastName = reg.exec(item.fileName)![0]
     if (lastName === fileModeType.value) {
       return item
     }
   })
-}
-
-const handleSelectionChange = (fileMeet: tableDataType) => {
-  if (fileMeet.length === 0) return
-  if (fileMeet.length > 1) {
-    downAllDisabled.value = false
+  if (data.length === 0) {
+    ElMessage.warning({
+      showClose: true,
+      message: '暂无符合条件的文件',
+    })
+    return
+  }
+  if (addMode.value === "替换") {
+    tableData.value = data
   } else {
-    downAllDisabled.value = true
+    tableData.value.unshift(...data)
   }
-  SelectFile.value = fileMeet
+
 }
 
-const downAllFile = () => {
-  for (let i of SelectFile.value) {
-    let url = URL.createObjectURL(i.file)
-    let a = document.createElement("a")
-    a.href = url
-    a.download = i.fileName
-    a.click()
-    a.remove()
-  }
-}
-
-const downFile = (file: oneFileType) => {
-  let url = URL.createObjectURL(file.file)
-  let a = document.createElement("a")
-  a.href = url
-  a.download = file.fileName
-  a.click()
-  a.remove()
-}
-
-const deleteOneFile = (file: oneFileType) => {
-  tableData.value.splice(tableData.value.findIndex(item => item.id === file.id), 1)
-}
-
-const deleteAllFile = () => {
-  SelectFile.value.forEach(item => {
-    tableData.value.splice(tableData.value.findIndex(item2 => item2.id === item.id), 1)
+const fileNameAndTypeFilter = () => {
+  const fileNameArr = filterAskName.value.split(',')
+  let result = filterData.value.filter(item => fileNameArr.some(item2 => item.fileName.includes(item2)))
+  let data = result.filter((item) => {
+    let lastName = reg.exec(item.fileName)![0]
+    if (lastName === fileModeType.value) {
+      return item
+    }
   })
-}
-
-function time($: number) {
-  let date = new Date(Number($));
-  let Y = date.getFullYear(); // 年
-  let M = R(date.getMonth() + 1); // 月
-  let D = R(date.getDate()); // 日
-  let h = R(date.getHours()); // 时
-  let m = R(date.getMinutes()); // 分
-  let s = R(date.getSeconds()); // 秒
-  return `${Y}年${M}月${D}日 ${h}:${m}:${s}`;
-
-  // 个位数补零功能
-  function R(E: number) {
-    return `${E < 10 ? 0 : ""}${E}`;
+  if (data.length === 0) {
+    ElMessage.warning({
+      showClose: true,
+      message: '暂无符合条件的文件',
+    })
+    return
+  }
+  if (addMode.value === "替换") {
+    tableData.value = data
+  } else {
+    tableData.value.unshift(...data)
   }
 }
 
@@ -297,12 +232,4 @@ function time($: number) {
   padding: 0;
   overflow: hidden;
   box-sizing: border-box;
-}
-
-.inputFile {
-  display: block;
-  opacity: 0;
-  width: 100%;
-  height: 100%;
-  cursor: pointer;
 }</style>
